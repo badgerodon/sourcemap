@@ -5,6 +5,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -26,11 +29,11 @@ func Test(t *testing.T) {
 		sf := bufio.NewScanner(strings.NewReader(f))
 		for sf.Scan() {
 			w.WriteSourceLine(sf.Text())
-			w.WriteGeneratedLine(Segment{0, i, ln, 0})
+			w.WriteGeneratedLine(Segment{ln, 0, i, ln, 0, 0})
 			ln++
 		}
 		w.WriteSourceLine("")
-		w.WriteGeneratedLine(Segment{0, i, ln, 0})
+		w.WriteGeneratedLine(Segment{ln, 0, i, ln, 0, 0})
 	}
 	w.Close()
 
@@ -41,4 +44,28 @@ func Test(t *testing.T) {
 	err = json.NewDecoder(&out).Decode(&result)
 	assert.Nil(err)
 	assert.Equal("AAAA;AACA;AACA;AACA;AACA;AACA;AACA;ACNA;AACA;AACA", result.Mappings)
+}
+
+func TestWrite(t *testing.T) {
+	assert := assert.New(t)
+
+	tf := filepath.Join(os.TempDir(), "test-write.map")
+	defer os.Remove(tf)
+
+	sm := &SourceMap{
+		File: "test.js",
+		Mappings: [][]Segment{
+			{{0, 0, 0, 0, 0, 0}},
+			{{1, 0, 0, 1, 0, 0}},
+			{{2, 0, 1, 0, 0, 0}},
+			{{2, 0, 1, 1, 0, 0}},
+		},
+		Sources:        []string{"f1.js", "j2.js"},
+		SourcesContent: []string{"alert('f1-1');\nalert('f1-2');\nalert('f1-3');\n;\nalert('f1-4');\n\n", "alert('f2-1');\nalert('f2-2');\n"},
+	}
+	err := Write(tf, sm)
+	assert.Nil(err)
+
+	_, err = ioutil.ReadFile(tf)
+	assert.Nil(err)
 }
