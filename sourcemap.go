@@ -153,10 +153,13 @@ func Generate(name string, r io.Reader) (*Map, error) {
 	br := bufio.NewReader(r)
 	for {
 		bs, err := br.ReadSlice('\n')
-		if err != nil && err != io.EOF {
+		if err != nil && err != io.EOF && err != bufio.ErrBufferFull {
 			return nil, err
 		}
 		m.SourcesContent[0] += string(bs)
+		if err == bufio.ErrBufferFull {
+			continue
+		}
 		m.decodedMappings = append(m.decodedMappings, Mapping{
 			GeneratedLine:   i,
 			GeneratedColumn: 0,
