@@ -3,8 +3,12 @@ package sourcemap
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"gopkg.in/sourcemap.v1/base64vlq"
 	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -101,6 +105,41 @@ func (m *Map) DecodedMappings() []Mapping {
 	return m.decodedMappings
 }
 
+func ReadFile(fileName string) (*Map, error) {
+	m := &Map{}
+	fr, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer fr.Close()
+
+	err = json.NewDecoder(fr).Decode(m)
+	if err != nil {
+		return nil, err
+	}
+
+	if m.SourcesContent == nil {
+		m.SourcesContent = make([]string, len(m.Sources))
+		for i, src := range m.Sources {
+			fn := filepath.Join(filepath.Dir(fileName), "./"+m.SourceRoot+src)
+			bs, _ := ioutil.ReadFile(fn)
+			m.SourcesContent[i] = string(bs)
+		}
+	}
+
+	return m, nil
+}
+
+func WriteFile(fileName string, m *Map) error {
+	fw, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer fw.Close()
+
+	return json.NewEncoder(fw).Encode(m)
+}
+
 func Generate(name string, r io.Reader) (*Map, error) {
 	m := &Map{
 		Version:         3,
@@ -143,15 +182,18 @@ func Merge(name string, maps ...*Map) *Map {
 		decodedMappings: []Mapping{},
 	}
 
+	generatedLineOffset := 0
 	sourceIndexOffset := 0
 	for _, tm := range maps {
 		m.Sources = append(m.Sources, tm.Sources...)
 		m.SourcesContent = append(m.SourcesContent, tm.SourcesContent...)
-		ms := tm.DecodedMappings()
-		for _, mm := range ms {
+		tms := tm.DecodedMappings()
+		for _, mm := range tms {
+			mm.GeneratedLine += generatedLineOffset
 			mm.SourceIndex += sourceIndexOffset
 			m.decodedMappings = append(m.decodedMappings, mm)
 		}
+		generatedLineOffset += len(tms)
 		sourceIndexOffset += len(m.Sources)
 	}
 	m.Mappings = encodeMappings(m.decodedMappings, false)
